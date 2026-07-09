@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ליצור בקליק</string>
+    <string name="tagline">בונים אפליקציות אנדרואיד בקליק אחד</string>
+
+    <string name="register_title">הרשמה</string>
+    <string name="register_name">שם מלא</string>
+    <string name="register_email">אימייל</string>
+    <string name="register_password">סיסמה</string>
+    <string name="register_cta">יצירת פרופיל</string>
+    <string name="register_have_account">יש לך כבר חשבון? התחברי</string>
+
+    <string name="login_title">התחברות</string>
+    <string name="login_cta">התחברות</string>
+    <string name="login_ai_key_label">מפתח API של מודל ה-AI</string>
+    <string name="login_ai_provider_label">ספק AI</string>
+
+    <string name="projects_title">הפרויקטים שלי</string>
+    <string name="projects_new">פרויקט חדש</string>
+    <string name="projects_empty">אין עדיין פרויקטים — נלחץ על + כדי להתחיל</string>
+
+    <string name="spec_title">איפיון האפליקציה</string>
+    <string name="spec_upload_existing">יש לי אפיון מוכן — להעלות קובץ</string>
+    <string name="spec_start_chat">לבנות אפיון עם צ׳אט מודרך</string>
+    <string name="spec_confirm">אישור האפיון והמשך לבנייה</string>
+
+    <string name="settings_engine_title">הגדרות מנועים</string>
+    <string name="settings_ai_engine">מנוע AI</string>
+    <string name="settings_ai_cloud">Cloud API</string>
+    <string name="settings_ai_local">מודל מקומי (Offline)</string>
+    <string name="settings_build_engine">מנוע בנייה</string>
+    <string name="settings_build_github">GitHub Actions</string>
+    <string name="settings_build_local">בנייה מקומית (Offline)</string>
+</resources>
