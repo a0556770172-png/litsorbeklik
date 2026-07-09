@@ -18,7 +18,7 @@ object SupabaseModule {
     // TODO: move these two into local.properties / BuildConfig fields instead of hardcoding,
     // once the project is opened in Android Studio (they are safe to expose, RLS enforces access).
     private const val SUPABASE_URL = "https://krhbgeewzruuvpdxjbiv.supabase.co"
-    private const val SUPABASE_ANON_KEY = "REPLACE_WITH_ANON_PUBLIC_KEY"
+    private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyaGJnZWV3enJ1dXZwZHhqYml2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MTc1OTMsImV4cCI6MjA5OTE5MzU5M30.Fo5KAJg_XemNaVbRYkPUwc8ab7p7bz7UFZoQcDDjwyo"
 
     val client: SupabaseClient by lazy {
         createSupabaseClient(
