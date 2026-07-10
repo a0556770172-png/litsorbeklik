@@ -13,3 +13,4 @@ local.properties
 *.jks
 *.p12
 SIGNING_CREDENTIALS_DO_NOT_COMMIT.txt
+/_downloaded_apk/
