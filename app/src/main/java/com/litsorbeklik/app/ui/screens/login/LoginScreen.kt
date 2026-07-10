@@ -1,10 +1,15 @@
 package com.litsorbeklik.app.ui.screens.login
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.litsorbeklik.app.R
 import com.litsorbeklik.app.data.model.AiProvider
@@ -31,11 +36,15 @@ fun LoginScreen(
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.login_title)) }) }) { padding ->
         Column(Modifier.padding(padding).padding(24.dp)) {
-            OutlinedTextField(
-                value = email, onValueChange = { email = it },
-                label = { Text(stringResource(R.string.register_email)) },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
-            )
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                OutlinedTextField(
+                    value = email, onValueChange = { email = it },
+                    label = { Text(stringResource(R.string.register_email)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = password, onValueChange = { password = it },

@@ -22,7 +22,7 @@ class AuthRepository(
 
     suspend fun register(fullName: String, email: String, password: String): Result<Profile> = runCatching {
         auth.signUpWith(Email) {
-            this.email = email
+            this.email = sanitizeEmail(email)
             this.password = password
         }
         val userId = auth.currentUserOrNull()?.id
@@ -37,7 +37,7 @@ class AuthRepository(
 
     suspend fun login(email: String, password: String): Result<Profile> = runCatching {
         auth.signInWith(Email) {
-            this.email = email
+            this.email = sanitizeEmail(email)
             this.password = password
         }
         val userId = auth.currentUserOrNull()?.id ?: error("Sign-in succeeded but no user id was returned")
@@ -53,6 +53,15 @@ class AuthRepository(
     }
 
     fun currentUserId(): String? = auth.currentUserOrNull()?.id
+
+    /**
+     * RTL text fields (this app's UI is Hebrew) can silently embed invisible bidi-control
+     * characters (LRM/RLM/isolates, Unicode category Cf) around Latin-script input, which
+     * Supabase's server-side email regex then rejects as "invalid format" even though the
+     * address looks correct on screen. Strip those out before it ever reaches the network.
+     */
+    private fun sanitizeEmail(raw: String): String =
+        raw.trim().filterNot { it.category == CharCategory.FORMAT }
 
     private fun generateUserCode(): String {
         val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no ambiguous chars
