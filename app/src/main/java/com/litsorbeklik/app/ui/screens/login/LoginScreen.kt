@@ -8,15 +8,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.litsorbeklik.app.R
 import com.litsorbeklik.app.data.model.AiProvider
+import com.litsorbeklik.app.data.repository.AuthRepository
+import com.litsorbeklik.app.data.repository.SecretsRepository
+import com.litsorbeklik.app.data.session.SessionState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(onLoggedIn: () -> Unit) {
+fun LoginScreen(
+    authRepository: AuthRepository = AuthRepository(),
+    secretsRepository: SecretsRepository = SecretsRepository(),
+    onLoggedIn: () -> Unit,
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var provider by remember { mutableStateOf(AiProvider.GEMINI) }
     var apiKey by remember { mutableStateOf("") }
     var providerMenuExpanded by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.login_title)) }) }) { padding ->
         Column(Modifier.padding(padding).padding(24.dp)) {
@@ -75,17 +86,46 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
                 supportingText = { Text("המפתח מוצפן ונשמר רק בשבילך — ראה מסמך אבטחה") },
             )
 
+            errorMessage?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
+
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
-                    // TODO: Supabase Auth signIn(email, password); encrypt+store apiKey via
-                    //       SecretCrypto before upserting into `user_secrets`.
-                    onLoggedIn()
+                    errorMessage = null
+                    loading = true
+                    scope.launch {
+                        val loginResult = authRepository.login(email, password)
+                        loginResult.onSuccess { profile ->
+                            SessionState.onAuthenticated(profile.id, password)
+                            runCatching {
+                                secretsRepository.saveAiApiKey(
+                                    ownerId = profile.id,
+                                    provider = provider.name,
+                                    plainApiKey = apiKey,
+                                    password = password,
+                                )
+                            }.onFailure {
+                                errorMessage = "התחברת, אבל שמירת מפתח ה-AI נכשלה: ${it.message}"
+                            }
+                            loading = false
+                            onLoggedIn()
+                        }.onFailure {
+                            loading = false
+                            errorMessage = it.message ?: "ההתחברות נכשלה"
+                        }
+                    }
                 },
-                enabled = email.isNotBlank() && password.isNotBlank() && apiKey.isNotBlank(),
+                enabled = email.isNotBlank() && password.isNotBlank() && apiKey.isNotBlank() && !loading,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(R.string.login_cta))
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(stringResource(R.string.login_cta))
+                }
             }
         }
     }

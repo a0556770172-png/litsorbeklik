@@ -19,12 +19,13 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
 
         composable(Routes.REGISTER) {
             RegisterScreen(
-                onRegistered = { navController.navigate(Routes.LOGIN) },
+                onRegistered = { _, _ -> navController.navigate(Routes.LOGIN) },
                 onGoToLogin = { navController.navigate(Routes.LOGIN) },
             )
         }
 
         composable(Routes.LOGIN) {
+            // LoginScreen already calls SessionState.onAuthenticated(...) internally on success.
             LoginScreen(onLoggedIn = {
                 navController.navigate(Routes.PROJECTS) {
                     popUpTo(Routes.REGISTER) { inclusive = true }
@@ -35,7 +36,7 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
         composable(Routes.PROJECTS) {
             ProjectListScreen(
                 onOpenProject = { project -> navController.navigate(Routes.spec(project.id)) },
-                onNewProject = { navController.navigate(Routes.spec("new")) },
+                onNewProject = { created -> navController.navigate(Routes.spec(created.id)) },
             )
         }
 

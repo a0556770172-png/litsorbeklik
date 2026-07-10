@@ -1,17 +1,18 @@
 package com.litsorbeklik.app.data.engines
 
+import com.litsorbeklik.app.data.engines.net.GithubApiClient
 import com.litsorbeklik.app.data.model.BuildRun
 import com.litsorbeklik.app.data.model.GeneratedProject
+import java.util.UUID
 
 /**
- * The user connects a repo THEY already created (private or public) via a fine-grained PAT.
- * This engine never creates repos or accounts on the user's behalf — it only pushes generated
- * project files into the existing repo and relies on a committed `.github/workflows/build.yml`
- * (see repo root of THIS project for the reference workflow) to assemble + sign the release APK.
+ * The user connects a repo THEY already created (private or public) via a fine-grained or
+ * classic PAT. This engine never creates repos or accounts on the user's behalf — it only pushes
+ * generated project files into the existing repo (via the Contents API — no git binary / JGit
+ * needed on Android) and relies on a committed `.github/workflows/build.yml` (see this project's
+ * own repo root for the reference workflow) to assemble + sign the release APK.
  *
- * Because the GitHub REST API may not be reachable from every execution environment, status is
- * tracked primarily through the git push result and, where available, the Actions run page —
- * polling falls back to asking the user to confirm pass/fail if the API can't be reached.
+ * Runs on the *end user's device*, so it is unaffected by any developer-sandbox network limits.
  */
 class GithubBuildEngine(
     private val repoOwner: String,
@@ -19,21 +20,42 @@ class GithubBuildEngine(
     private val personalAccessToken: String,
 ) : BuildEngine {
 
+    private val api = GithubApiClient(repoOwner, repoName, personalAccessToken)
+
     override val id: String = "github:$repoOwner/$repoName"
 
     override suspend fun isAvailable(): Boolean = personalAccessToken.isNotBlank()
 
-    override suspend fun startBuild(project: GeneratedProject): Result<BuildRun> {
-        // TODO: write `project.files` into a local git working copy, commit, and push over
-        // https://<token>@github.com/<owner>/<repo>.git — a push to the default branch is what
-        // triggers the workflow (see build.yml `on: push`).
-        throw NotImplementedError("Wire up git push via JGit or a bundled git binary")
+    override suspend fun startBuild(project: GeneratedProject): Result<BuildRun> = runCatching {
+        val filesByPath = project.files.associate { it.path to it.content }
+        val commitMessage = "Generated build: ${project.appName} (${UUID.randomUUID().toString().take(8)})"
+
+        api.pushProject(filesByPath, commitMessage).getOrThrow()
+
+        // Give GitHub a moment to register the run triggered by this push before polling for it.
+        kotlinx.coroutines.delay(5_000)
+        val run = api.latestWorkflowRun().getOrThrow()
+
+        BuildRun(
+            id = run.id.toString(),
+            projectId = "", // filled in by the caller once persisted to Supabase
+            engine = "GITHUB",
+            status = run.status,
+            logUrl = run.htmlUrl,
+            apkUrl = null,
+        )
     }
 
-    override suspend fun refreshStatus(run: BuildRun): Result<BuildRun> {
-        // TODO: try the Actions REST API first; if unreachable, fall back to the workflow's
-        // static status badge (https://github.com/<owner>/<repo>/actions/workflows/build.yml/badge.svg)
-        // or ask the user to check manually.
-        throw NotImplementedError("Wire up status polling")
+    override suspend fun refreshStatus(run: BuildRun): Result<BuildRun> = runCatching {
+        val runId = run.id.toLongOrNull()
+            ?: error("GithubBuildEngine.refreshStatus needs a numeric GitHub run id")
+        val refreshed = api.getRun(runId).getOrElse {
+            // API unreachable/rate-limited: fall back to the static status badge as a best-effort signal.
+            return@runCatching run.copy(logUrl = api.statusBadgeUrl())
+        }
+        run.copy(
+            status = refreshed.status,
+            logUrl = refreshed.htmlUrl,
+        )
     }
 }

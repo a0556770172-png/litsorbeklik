@@ -12,14 +12,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.litsorbeklik.app.R
+import com.litsorbeklik.app.data.repository.AuthRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegisterScreen(onRegistered: () -> Unit, onGoToLogin: () -> Unit) {
+fun RegisterScreen(
+    authRepository: AuthRepository = AuthRepository(),
+    onRegistered: (fullName: String, password: String) -> Unit,
+    onGoToLogin: () -> Unit,
+) {
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Scaffold { padding ->
         Column(
@@ -68,13 +76,25 @@ fun RegisterScreen(onRegistered: () -> Unit, onGoToLogin: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     )
 
+                    errorMessage?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                    }
+
                     Spacer(Modifier.height(20.dp))
                     Button(
                         onClick = {
+                            errorMessage = null
                             loading = true
-                            // TODO: Supabase Auth signUp(email, password) + insert into `profiles`
-                            //       with a generated user_code, then navigate onward.
-                            onRegistered()
+                            scope.launch {
+                                val result = authRepository.register(fullName, email, password)
+                                loading = false
+                                result.onSuccess {
+                                    onRegistered(fullName, password)
+                                }.onFailure {
+                                    errorMessage = it.message ?: "ההרשמה נכשלה"
+                                }
+                            }
                         },
                         enabled = fullName.isNotBlank() && email.isNotBlank() && password.length >= 6 && !loading,
                         modifier = Modifier.fillMaxWidth(),
