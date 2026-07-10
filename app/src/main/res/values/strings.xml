@@ -31,4 +31,8 @@
     <string name="settings_build_engine">מנוע בנייה</string>
     <string name="settings_build_github">GitHub Actions</string>
     <string name="settings_build_local">בנייה מקומית (Offline)</string>
+
+    <string name="update_available_title">עדכון חדש זמין</string>
+    <string name="update_now">עדכון עכשיו</string>
+    <string name="update_later">אחר כך</string>
 </resources>

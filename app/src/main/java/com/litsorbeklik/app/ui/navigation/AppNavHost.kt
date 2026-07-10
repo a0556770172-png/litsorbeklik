@@ -5,8 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.litsorbeklik.app.data.model.AiEngineType
-import com.litsorbeklik.app.data.model.BuildEngineType
+import com.litsorbeklik.app.ui.screens.build.BuildScreen
 import com.litsorbeklik.app.ui.screens.login.LoginScreen
 import com.litsorbeklik.app.ui.screens.projects.ProjectListScreen
 import com.litsorbeklik.app.ui.screens.register.RegisterScreen
@@ -41,17 +40,26 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
         }
 
         composable(Routes.SPEC) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getString("projectId") ?: "new"
+            val projectId = backStackEntry.arguments?.getString("projectId") ?: return@composable
             SpecChatScreen(
-                onSendMessage = { /* TODO: forward to active AiEngine.chatSpecStep */ },
-                onUploadExistingSpec = { /* TODO: file picker -> parse -> AppSpec */ },
+                projectId = projectId,
                 onConfirmSpec = { navController.navigate(Routes.settings(projectId)) },
             )
         }
 
-        composable(Routes.SETTINGS) {
+        composable(Routes.SETTINGS) { backStackEntry ->
+            val projectId = backStackEntry.arguments?.getString("projectId") ?: return@composable
             EngineSettingsScreen(
-                onSave = { _: AiEngineType, _: BuildEngineType ->
+                projectId = projectId,
+                onSaved = { navController.navigate(Routes.build(projectId)) },
+            )
+        }
+
+        composable(Routes.BUILD) { backStackEntry ->
+            val projectId = backStackEntry.arguments?.getString("projectId") ?: return@composable
+            BuildScreen(
+                projectId = projectId,
+                onFinished = {
                     navController.popBackStack(Routes.PROJECTS, inclusive = false)
                 },
             )

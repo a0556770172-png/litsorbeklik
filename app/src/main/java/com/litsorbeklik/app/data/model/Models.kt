@@ -53,10 +53,13 @@ data class GeneratedProject(
 
 @Serializable
 data class BuildRun(
+    /** Supabase `build_runs.id` (uuid) once persisted; empty string before the first insert. */
     val id: String,
     val projectId: String,
     val engine: String,
     val status: String,
+    /** Engine-specific run handle — e.g. the GitHub Actions numeric run id. Not the same as [id]. */
+    val externalRunId: String? = null,
     val logUrl: String? = null,
     val apkUrl: String? = null,
 )

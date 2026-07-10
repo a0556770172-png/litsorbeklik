@@ -9,18 +9,41 @@ import androidx.compose.ui.unit.dp
 import com.litsorbeklik.app.R
 import com.litsorbeklik.app.data.model.AiEngineType
 import com.litsorbeklik.app.data.model.BuildEngineType
+import com.litsorbeklik.app.data.repository.ProjectsRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EngineSettingsScreen(
-    initialAiEngine: AiEngineType = AiEngineType.CLOUD,
-    initialBuildEngine: BuildEngineType = BuildEngineType.GITHUB,
-    onSave: (AiEngineType, BuildEngineType) -> Unit,
+    projectId: String,
+    projectsRepository: ProjectsRepository = ProjectsRepository(),
+    onSaved: () -> Unit,
 ) {
-    var aiEngine by remember { mutableStateOf(initialAiEngine) }
-    var buildEngine by remember { mutableStateOf(initialBuildEngine) }
+    var aiEngine by remember { mutableStateOf(AiEngineType.CLOUD) }
+    var buildEngine by remember { mutableStateOf(BuildEngineType.GITHUB) }
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(projectId) {
+        projectsRepository.getProject(projectId)
+            .onSuccess { project ->
+                aiEngine = if (project.aiEngine == "LOCAL") AiEngineType.LOCAL else AiEngineType.CLOUD
+                buildEngine = if (project.buildEngine == "LOCAL") BuildEngineType.LOCAL else BuildEngineType.GITHUB
+                loading = false
+            }
+            .onFailure {
+                errorMessage = it.message ?: "טעינת הפרויקט נכשלה"
+                loading = false
+            }
+    }
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.settings_engine_title)) }) }) { padding ->
+        if (loading) {
+            Box(Modifier.padding(padding).fillMaxSize()) { CircularProgressIndicator(Modifier.padding(24.dp)) }
+            return@Scaffold
+        }
         Column(Modifier.padding(padding).padding(20.dp)) {
             Text(stringResource(R.string.settings_ai_engine), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
@@ -54,9 +77,32 @@ fun EngineSettingsScreen(
                 }
             }
 
+            errorMessage?.let {
+                Spacer(Modifier.height(12.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
+
             Spacer(Modifier.height(28.dp))
-            Button(onClick = { onSave(aiEngine, buildEngine) }, modifier = Modifier.fillMaxWidth()) {
-                Text("שמירה")
+            Button(
+                enabled = !saving,
+                onClick = {
+                    saving = true
+                    scope.launch {
+                        projectsRepository.updateEngines(projectId, aiEngine.name, buildEngine.name)
+                            .onSuccess {
+                                saving = false
+                                onSaved()
+                            }
+                            .onFailure {
+                                saving = false
+                                errorMessage = it.message ?: "השמירה נכשלה"
+                            }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                else Text("שמירה")
             }
         }
     }

@@ -37,17 +37,18 @@ class GithubBuildEngine(
         val run = api.latestWorkflowRun().getOrThrow()
 
         BuildRun(
-            id = run.id.toString(),
-            projectId = "", // filled in by the caller once persisted to Supabase
+            id = "", // filled in by the caller once persisted to Supabase
+            projectId = "",
             engine = "GITHUB",
             status = run.status,
+            externalRunId = run.id.toString(),
             logUrl = run.htmlUrl,
             apkUrl = null,
         )
     }
 
     override suspend fun refreshStatus(run: BuildRun): Result<BuildRun> = runCatching {
-        val runId = run.id.toLongOrNull()
+        val runId = run.externalRunId?.toLongOrNull()
             ?: error("GithubBuildEngine.refreshStatus needs a numeric GitHub run id")
         val refreshed = api.getRun(runId).getOrElse {
             // API unreachable/rate-limited: fall back to the static status badge as a best-effort signal.

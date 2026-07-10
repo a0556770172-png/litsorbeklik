@@ -59,6 +59,30 @@ class ProjectsRepository(
         )
     }
 
+    suspend fun getProject(projectId: String): Result<ProjectEntity> = runCatching {
+        val row = client.from("projects")
+            .select()
+            .decodeList<ProjectRowDto>()
+            .first { it.id == projectId }
+        ProjectEntity(
+            id = row.id,
+            ownerId = row.ownerId,
+            name = row.name,
+            packageName = row.packageName,
+            status = row.status,
+            repoUrl = row.repoUrl,
+            aiEngine = row.aiEngine,
+            buildEngine = row.buildEngine,
+        )
+    }
+
+    suspend fun updateEngines(projectId: String, aiEngine: String, buildEngine: String): Result<Unit> = runCatching {
+        client.from("projects").update(mapOf("ai_engine" to aiEngine, "build_engine" to buildEngine)) {
+            filter { eq("id", projectId) }
+        }
+        Unit
+    }
+
     suspend fun updateStatus(projectId: String, status: String): Result<Unit> = runCatching {
         client.from("projects").update(mapOf("status" to status)) {
             filter { eq("id", projectId) }
