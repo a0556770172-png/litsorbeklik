@@ -12,6 +12,7 @@ import com.litsorbeklik.app.data.repository.ProjectsRepository
 import com.litsorbeklik.app.domain.BuildOrchestrator
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuildScreen(
     projectId: String,
