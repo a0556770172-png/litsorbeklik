@@ -21,18 +21,25 @@ class AuthRepository(
     private val auth get() = client.auth
 
     suspend fun register(fullName: String, email: String, password: String): Result<Profile> = runCatching {
-        auth.signUpWith(Email) {
+        // signUpWith's own return carries the created user's id even when email confirmation
+        // is required and no session is established yet — currentUserOrNull() would be null
+        // in that case, which used to make every registration fail on this project.
+        val signedUpUser = auth.signUpWith(Email) {
             this.email = sanitizeEmail(email)
             this.password = password
         }
-        val userId = auth.currentUserOrNull()?.id
-            ?: error("Sign-up succeeded but no session/user was returned — check email confirmation settings")
+        val userId = signedUpUser?.id ?: error("ההרשמה נכשלה — לא התקבל מזהה משתמש מהשרת")
 
-        val userCode = generateUserCode()
-        val row = ProfileInsertDto(id = userId, fullName = fullName, userCode = userCode)
-        client.from("profiles").insert(row)
-
-        Profile(id = userId, fullName = fullName, userCode = userCode)
+        // Without an active session (confirmation pending), RLS blocks inserting the profile
+        // row as this request is unauthenticated. Defer it — [login] creates it lazily once the
+        // user actually has a session, right after they confirm their email and log in.
+        if (auth.currentSessionOrNull() != null) {
+            val userCode = generateUserCode()
+            client.from("profiles").insert(ProfileInsertDto(id = userId, fullName = fullName, userCode = userCode))
+            Profile(id = userId, fullName = fullName, userCode = userCode)
+        } else {
+            Profile(id = userId, fullName = fullName, userCode = "")
+        }
     }
 
     suspend fun login(email: String, password: String): Result<Profile> = runCatching {
@@ -42,10 +49,17 @@ class AuthRepository(
         }
         val userId = auth.currentUserOrNull()?.id ?: error("Sign-in succeeded but no user id was returned")
 
-        client.from("profiles")
-            .select()
-            .decodeSingle<ProfileRowDto>()
-            .let { Profile(id = it.id, fullName = it.fullName, userCode = it.userCode, createdAt = it.createdAt) }
+        val existing = client.from("profiles").select().decodeSingleOrNull<ProfileRowDto>()
+        val row = existing ?: run {
+            // Self-heal: the profile row is normally created at registration time, but that step
+            // is skipped when email confirmation was pending (see [register]) — create it now
+            // that we have a real, authenticated session and RLS will allow the insert.
+            val userCode = generateUserCode()
+            val fallbackName = email.substringBefore('@')
+            client.from("profiles").insert(ProfileInsertDto(id = userId, fullName = fallbackName, userCode = userCode))
+            ProfileRowDto(id = userId, fullName = fallbackName, userCode = userCode)
+        }
+        Profile(id = row.id, fullName = row.fullName, userCode = row.userCode, createdAt = row.createdAt)
     }
 
     suspend fun logout() {
