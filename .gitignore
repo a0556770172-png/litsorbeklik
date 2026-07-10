@@ -12,3 +12,4 @@ local.properties
 *.keystore
 *.jks
 *.p12
+SIGNING_CREDENTIALS_DO_NOT_COMMIT.txt
