@@ -15,7 +15,12 @@ object GeminiClient {
     private const val MODEL = "gemini-2.0-flash"
 
     suspend fun generateText(prompt: String, apiKey: String): String {
-        val body = GeminiRequest(contents = listOf(GeminiContent(parts = listOf(GeminiPart(prompt)))))
+        val body = GeminiRequest(
+            contents = listOf(GeminiContent(parts = listOf(GeminiPart(prompt)))),
+            // Explicit cap so a full-project generation isn't silently limited by whatever
+            // Gemini's unstated per-model default happens to be.
+            generationConfig = GeminiGenerationConfig(maxOutputTokens = 32_000),
+        )
         val response: HttpResponse = HttpClientProvider.client.post {
             url("https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent?key=$apiKey")
             contentType(ContentType.Application.Json)
@@ -27,7 +32,11 @@ object GeminiClient {
     }
 }
 
-@Serializable private data class GeminiRequest(val contents: List<GeminiContent>)
+@Serializable private data class GeminiRequest(
+    val contents: List<GeminiContent>,
+    val generationConfig: GeminiGenerationConfig? = null,
+)
+@Serializable private data class GeminiGenerationConfig(val maxOutputTokens: Int)
 @Serializable private data class GeminiContent(val parts: List<GeminiPart>, val role: String? = null)
 @Serializable private data class GeminiPart(val text: String)
 @Serializable private data class GeminiResponse(val candidates: List<GeminiCandidate> = emptyList())

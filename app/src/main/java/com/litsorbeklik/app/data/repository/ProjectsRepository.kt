@@ -89,6 +89,15 @@ class ProjectsRepository(
         }
         Unit
     }
+
+    /** Needed before [com.litsorbeklik.app.data.engines.EngineFactory.buildBuildEngine] can build a
+     *  GithubBuildEngine — there was previously no call site for this at all (see EngineSettingsScreen). */
+    suspend fun updateRepoUrl(projectId: String, repoUrl: String?): Result<Unit> = runCatching {
+        client.from("projects").update(mapOf("repo_url" to repoUrl)) {
+            filter { eq("id", projectId) }
+        }
+        Unit
+    }
 }
 
 @Serializable

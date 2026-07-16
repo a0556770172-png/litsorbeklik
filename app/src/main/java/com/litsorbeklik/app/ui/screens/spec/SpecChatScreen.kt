@@ -1,5 +1,7 @@
 package com.litsorbeklik.app.ui.screens.spec
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.litsorbeklik.app.R
@@ -165,19 +168,57 @@ fun SpecChatScreen(
     }
 }
 
+/**
+ * Text only for now (.txt/.md, or anything a file manager tags with a text MIME type) via Storage
+ * Access Framework — no server round-trip, matches the on-device-only constraint. PDF/DOCX parsing
+ * needs a real parser library (PdfBox-Android / Apache POI) and is intentionally left for later;
+ * picking one of those today just yields garbled/binary text and a visible result the user can reject.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UploadSpecDialog(onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
     var text by remember { mutableStateOf("") }
+    var pickError by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                ?: error("לא ניתן לפתוח את הקובץ שנבחר")
+        }.onSuccess {
+            text = it
+            pickError = null
+        }.onFailure {
+            pickError = "קריאת הקובץ נכשלה: ${it.message ?: "שגיאה לא ידועה"}"
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("הדבקת אפיון קיים") },
+        title = { Text("העלאת אפיון קיים") },
         text = {
-            OutlinedTextField(
-                value = text, onValueChange = { text = it },
-                modifier = Modifier.fillMaxWidth().height(220.dp),
-                placeholder = { Text("הדביקו כאן את טקסט האפיון המלא...") },
-            )
+            Column {
+                OutlinedButton(
+                    onClick = { filePicker.launch(arrayOf("text/plain", "text/markdown", "text/*")) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.UploadFile, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("בחירת קובץ (txt/md)")
+                }
+                pickError?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(10.dp))
+                Text("או הדביקו את הטקסט ישירות:", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it },
+                    modifier = Modifier.fillMaxWidth().height(220.dp),
+                    placeholder = { Text("הדביקו כאן את טקסט האפיון המלא...") },
+                )
+            }
         },
         confirmButton = { TextButton(onClick = { onSubmit(text) }, enabled = text.isNotBlank()) { Text("שמירה") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("ביטול") } },

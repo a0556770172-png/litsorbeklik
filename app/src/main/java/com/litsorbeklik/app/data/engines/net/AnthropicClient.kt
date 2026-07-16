@@ -14,13 +14,20 @@ import kotlinx.serialization.encodeToString
 
 /** Anthropic Claude — Messages API. */
 object AnthropicClient {
-    private const val MODEL = "claude-sonnet-4-5"
+    private const val MODEL = "claude-sonnet-5"
     private const val API_VERSION = "2023-06-01"
+
+    // A full multi-file Android project as one JSON blob needs a lot more than the old 8192-token
+    // cap (which likely truncated generation mid-JSON and broke parsing on every real attempt).
+    // Sonnet 5 supports up to 128K output, but that requires streaming to avoid HTTP timeouts —
+    // this client is a single blocking POST (see HttpClientProvider), so 32000 is a safer ceiling
+    // given the extended request timeout there. Moving to streaming would let this go higher.
+    private const val MAX_TOKENS = 32_000
 
     suspend fun generateText(prompt: String, apiKey: String): String {
         val body = MessagesRequest(
             model = MODEL,
-            maxTokens = 8192,
+            maxTokens = MAX_TOKENS,
             messages = listOf(AnthropicMessage(role = "user", content = prompt)),
         )
         val response: HttpResponse = HttpClientProvider.client.post {

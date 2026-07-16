@@ -13,7 +13,10 @@ android {
         applicationId = "com.litsorbeklik.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // CI overrides via APP_VERSION_CODE (github.run_number) so every release build's embedded
+        // versionCode matches what gets published to app_versions — keeps self-update comparisons
+        // meaningful without relying on developers to remember to bump this by hand.
+        versionCode = (System.getenv("APP_VERSION_CODE")?.toIntOrNull()) ?: 1
         versionName = "0.1.0"
     }
 

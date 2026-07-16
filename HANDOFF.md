@@ -31,21 +31,56 @@ APK חתום. Supabase (מסלול חינמי) הוא בסיס הנתונים ה
 
 ## מה חסר — לפי סדר עדיפות מומלץ
 
-1. **בדיקת קומפילציה בפועל** — הקוד הזה נכתב בלי גישה לקומפיילר אנדרואיד. המשימה הראשונה
-   והקריטית: `./gradlew assembleDebug` (או `gradle assembleDebug` אם אין wrapper עדיין — להריץ
-   `gradle wrapper` פעם אחת כדי לייצר `gradlew`), ולתקן כל שגיאה שתצא. יש הרבה מקום לשגיאות API
-   קטנות (בעיקר בסינטקס של supabase-kt: `insert(){select()}`, `update(){filter{}}` וכו').
+1. ~~בדיקת קומפילציה בפועל~~ — **בוצע (2026-07-16)**: `./gradlew assembleDebug` מקומית ו-CI
+   (`Build & Sign Release APK`) שניהם עוברים בהצלחה על `main` הנוכחי (3ead61e). מספר קומיטים אחרי
+   כתיבת המסמך הזה תיקנו שגיאות קומפילציה, קריסת התחברות, ובעיות RTL/CA-certs — ראה `git log`.
 2. **LocalAiEngine אמיתי** — אינטגרציית LiteRT-LM או MLC-LLM, הורדת מודל on-demand (לא לצרף ל-APK),
    לפי הטירינג ב-`DeviceCapability`.
 3. **LocalBuildEngine אמיתי** — toolchain מוטבע (aapt2/d8/apksigner מ-Android SDK Build-Tools) בלי
    Gradle מלא, או fallback לסביבת Termux+Gradle למכשירים חזקים.
-4. **העלאת קובץ אפיון אמיתי** — כרגע `SpecChatScreen` תומך רק בהדבקת טקסט. להוסיף file picker
-   (Storage Access Framework) + פרסור txt/pdf/docx.
-5. **פרסום גרסה חדשה (הצד השני של ה-self-update) — ראה סעיף נפרד למטה, זה כרגע לא קיים בכלל.**
+4. ~~העלאת קובץ אפיון אמיתי~~ — **בוצע חלקית (2026-07-16)**: `SpecChatScreen`/`UploadSpecDialog`
+   תומך עכשיו בבחירת קובץ טקסט אמיתי (SAF, `ActivityResultContracts.OpenDocument`) בנוסף להדבקה —
+   txt/md בלבד. פרסור PDF/DOCX עדיין דורש ספרייה ייעודית (PdfBox-Android / Apache POI) ולא בוצע.
+5. ~~פרסום גרסה חדשה (הצד השני של ה-self-update)~~ — **בוצע (2026-07-16)**: נוסף step ל-
+   `.github/workflows/build.yml` (`Publish release to Supabase`) שרץ אחרי `assembleRelease` על כל
+   push ל-`main`, מעלה את ה-APK ל-bucket `app-releases` ומכניס שורה ל-`app_versions`. `versionCode`
+   נגזר אוטומטית מ-`github.run_number` (גם ב-build עצמו דרך `APP_VERSION_CODE`, גם ב-insert) כדי
+   שה-versionCode המוטבע בפועל ב-APK תמיד יתאים למה שנשמר ב-DB.
+   **דורש הגדרה ידנית לפני שזה עובד**: להוסיף GitHub secret בשם `SUPABASE_SERVICE_ROLE_KEY`
+   (מ-Supabase Dashboard → Settings → API → `service_role` — **לא** ה-anon key שכבר מוטמע באפליקציה)
+   דרך `gh secret set SUPABASE_SERVICE_ROLE_KEY --repo a0556770172-png/litsorbeklik`. בלי הסוד הזה
+   ה-step פשוט מדלג (לא נכשל) — ה-CI הרגיל ממשיך לעבוד כרגיל.
 6. חילוץ אפיון מבני מהצ'אט (goal/screens/features) — היום זה simplistic (`buildDraftSpecFromHistory`
    ב-`SpecChatScreen.kt`), שווה פרומפט ייעודי ל-"תחזיר JSON מבני של האפיון".
 7. בדיקות יחידה (`ProjectValidator`, `SecretCrypto` וכו') — עדיין אין תיקיית test.
 8. אייקון/מיתוג מלא — כרגע אייקון וקטורי פלייסהולדר.
+
+**הערה:** מסמך זה מתעדכן ידנית ולכן נוטה להתיישן מהר יחסית לקוד/git log בפועל — לפני שמסתמכים
+עליו, כדאי לבדוק `git log --oneline` ו-`gh run list` כדי לוודא שהסטטוס עדיין נכון.
+
+## סקירה ותיקונים נוספים (2026-07-16) — הסיבה שלא היה אף build מוצלח
+
+בדקתי בפועל את ה-DB (לא רק את הקוד): היה חשבון אמיתי אחד עם התחברות/שמירת מפתח/יצירת פרויקט/אפיון
+תקינים, אבל `build_runs` היה **ריק לגמרי** — אף פעם לא הושלמה בנייה. מצאתי ותיקנתי:
+
+1. **חוסם מוחלט**: לא הייתה שום דרך ב-UI להזין repo URL או GitHub PAT (`SecretsRepository.saveGithubToken`
+   הוגדר אבל **אף קובץ לא קרא לו**). כל פרויקט חדש ברירת המחדל שלו `buildEngine="GITHUB"`, כך
+   ש-`EngineFactory.buildBuildEngine` תמיד נכשל מיד. תוקן: `EngineSettingsScreen.kt` כולל עכשיו
+   שדות repo URL + PAT, ו-`ProjectsRepository.updateRepoUrl` (חדש) + `SecretsRepository.saveGithubToken`
+   (סוף סוף מחוברים) נקראים בשמירה.
+2. **`GithubBuildEngine` דחף כל קובץ כקומיט נפרד** (N קומיטים, N הפעלות workflow לפרויקט אחד),
+   ואז תפס "ה-run האחרון" בלי סינון לפי head_sha — עלול לתפוס run לא קשור. תוקן: `GithubApiClient`
+   עכשיו דוחף commit אטומי יחיד (Git Data API: blobs→tree→commit→ref, כמו ב-Electron), ומחפש run
+   לפי head_sha עם retry (עד 10 ניסיונות, 3 שניות בין ניסיון).
+3. **`AnthropicClient.kt` השתמש ב-`"claude-sonnet-4-5"`** — לא מזהה מודל תקף (אומת מול תיעוד עדכני;
+   המזהה הנכון הוא `claude-sonnet-5`) — כל קריאה ל-Claude כנראה נכשלה. תוקן, וגם הועלה `maxTokens`
+   מ-8192 (סביר שקטע JSON של פרויקט שלם באמצע) ל-32000, עם timeout מוארך ל-300 שניות (הקריאה עדיין
+   לא streaming — אם עדיין נכשל על פרויקטים גדולים, המעבר הבא הוא streaming אמיתי). גם ל-Gemini/OpenAI/Grok
+   נוסף max output tokens מפורש (32000/32000) במקום להישען על ברירת המחדל הלא-ידועה של כל ספק.
+
+**עדיין לא נבדק בפועל על מכשיר אמיתי** — כל האימות שנעשה כאן הוא `./gradlew assembleDebug` בלבד.
+הצעד הבא המומלץ: להתקין ולנסות את כל הזרימה (התחברות → אפיון → הגדרות (כולל חיבור GitHub) → בנייה)
+פעם אחת עד הסוף.
 
 ## מנגנון עדכון גרסה (Self-Update) — קיים לעומת חסר
 

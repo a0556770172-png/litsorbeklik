@@ -10,6 +10,8 @@ import com.litsorbeklik.app.R
 import com.litsorbeklik.app.data.model.AiEngineType
 import com.litsorbeklik.app.data.model.BuildEngineType
 import com.litsorbeklik.app.data.repository.ProjectsRepository
+import com.litsorbeklik.app.data.repository.SecretsRepository
+import com.litsorbeklik.app.data.session.SessionState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -17,10 +19,14 @@ import kotlinx.coroutines.launch
 fun EngineSettingsScreen(
     projectId: String,
     projectsRepository: ProjectsRepository = ProjectsRepository(),
+    secretsRepository: SecretsRepository = SecretsRepository(),
     onSaved: () -> Unit,
 ) {
     var aiEngine by remember { mutableStateOf(AiEngineType.CLOUD) }
     var buildEngine by remember { mutableStateOf(BuildEngineType.GITHUB) }
+    var repoUrl by remember { mutableStateOf("") }
+    var githubToken by remember { mutableStateOf("") }
+    var hasStoredToken by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -31,6 +37,12 @@ fun EngineSettingsScreen(
             .onSuccess { project ->
                 aiEngine = if (project.aiEngine == "LOCAL") AiEngineType.LOCAL else AiEngineType.CLOUD
                 buildEngine = if (project.buildEngine == "LOCAL") BuildEngineType.LOCAL else BuildEngineType.GITHUB
+                repoUrl = project.repoUrl ?: ""
+                val ownerId = SessionState.userId
+                val password = SessionState.inMemoryPassword
+                if (ownerId != null && password != null) {
+                    hasStoredToken = secretsRepository.loadGithubToken(ownerId, password) != null
+                }
                 loading = false
             }
             .onFailure {
@@ -77,6 +89,40 @@ fun EngineSettingsScreen(
                 }
             }
 
+            if (buildEngine == BuildEngineType.GITHUB) {
+                Spacer(Modifier.height(20.dp))
+                Text("חיבור ל-GitHub", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "יש ליצור מראש מאגר (repo) עם קובץ .github/workflows/build.yml שבונה וחותם APK, " +
+                        "ולהזין כאן את הכתובת שלו וטוקן גישה אישי (PAT) עם הרשאות repo + workflow.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = repoUrl,
+                    onValueChange = { repoUrl = it },
+                    label = { Text("כתובת ה-repo") },
+                    placeholder = { Text("https://github.com/owner/repo") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = githubToken,
+                    onValueChange = { githubToken = it },
+                    label = { Text("GitHub Personal Access Token") },
+                    placeholder = { Text(if (hasStoredToken) "יש כבר טוקן שמור — השאר ריק כדי לא לשנות" else "ghp_...") },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (hasStoredToken) {
+                    Spacer(Modifier.height(4.dp))
+                    Text("טוקן שמור ✓", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
             errorMessage?.let {
                 Spacer(Modifier.height(12.dp))
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
@@ -86,9 +132,27 @@ fun EngineSettingsScreen(
             Button(
                 enabled = !saving,
                 onClick = {
+                    if (buildEngine == BuildEngineType.GITHUB && repoUrl.isBlank()) {
+                        errorMessage = "יש להזין כתובת repo כדי להשתמש בבנייה דרך GitHub"
+                        return@Button
+                    }
                     saving = true
+                    errorMessage = null
                     scope.launch {
-                        projectsRepository.updateEngines(projectId, aiEngine.name, buildEngine.name)
+                        val result = runCatching {
+                            projectsRepository.updateEngines(projectId, aiEngine.name, buildEngine.name).getOrThrow()
+                            if (buildEngine == BuildEngineType.GITHUB) {
+                                projectsRepository.updateRepoUrl(projectId, repoUrl.trim()).getOrThrow()
+                                if (githubToken.isNotBlank()) {
+                                    val ownerId = SessionState.userId ?: error("אין משתמש מחובר — יש להתחבר מחדש")
+                                    val password = SessionState.inMemoryPassword ?: error("יש להתחבר מחדש כדי לשמור טוקן")
+                                    secretsRepository.saveGithubToken(ownerId, githubToken.trim(), password)
+                                } else if (!hasStoredToken) {
+                                    error("יש להזין GitHub Personal Access Token")
+                                }
+                            }
+                        }
+                        result
                             .onSuccess {
                                 saving = false
                                 onSaved()

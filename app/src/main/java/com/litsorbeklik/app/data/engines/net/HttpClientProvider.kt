@@ -20,9 +20,11 @@ object HttpClientProvider {
         HttpClient(OkHttp) {
             install(ContentNegotiation) { json(json) }
             install(HttpTimeout) {
-                requestTimeoutMillis = 120_000
+                // Generous headroom for a full project-generation response (tens of thousands of
+                // output tokens) on a non-streaming call — see AnthropicClient's MAX_TOKENS comment.
+                requestTimeoutMillis = 300_000
                 connectTimeoutMillis = 30_000
-                socketTimeoutMillis = 120_000
+                socketTimeoutMillis = 300_000
             }
         }
     }

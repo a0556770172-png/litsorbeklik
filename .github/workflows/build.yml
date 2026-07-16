@@ -30,6 +30,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          APP_VERSION_CODE: ${{ github.run_number }}
         run: gradle :app:assembleRelease --no-daemon
 
       - name: Upload signed APK artifact
@@ -38,6 +39,50 @@ jobs:
           name: litsorbeklik-release
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      # Publishes every successful push-to-main build as a self-update for existing users.
+      # Needs SUPABASE_SERVICE_ROLE_KEY as a separate GitHub secret (service_role, NOT the anon
+      # key baked into the app) so it can bypass RLS to insert into app_versions and upload to the
+      # app-releases storage bucket. Skips quietly (not a failure) if that secret isn't set yet.
+      - name: Publish release to Supabase (self-update)
+        if: ${{ github.event_name == 'push' && secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        env:
+          SUPABASE_URL: https://krhbgeewzruuvpdxjbiv.supabase.co
+          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VERSION_CODE: ${{ github.run_number }}
+          CHANGELOG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          APK_PATH=$(ls app/build/outputs/apk/release/*.apk | head -n1)
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n1)
+          FILE_NAME="litsorbeklik-release-v${VERSION_NAME}-${VERSION_CODE}.apk"
+
+          echo "Uploading $APK_PATH as $FILE_NAME ..."
+          curl -sf -X POST \
+            "$SUPABASE_URL/storage/v1/object/app-releases/$FILE_NAME" \
+            -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+            -H "apikey: $SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            -H "x-upsert: true" \
+            --data-binary "@${APK_PATH}"
+
+          echo "Recording app_versions row ..."
+          PAYLOAD=$(jq -n \
+            --argjson version_code "$VERSION_CODE" \
+            --arg version_name "$VERSION_NAME" \
+            --arg apk_storage_path "$FILE_NAME" \
+            --arg changelog "$CHANGELOG" \
+            '{version_code:$version_code, version_name:$version_name, apk_storage_path:$apk_storage_path, changelog:$changelog}')
+
+          curl -sf -X POST \
+            "$SUPABASE_URL/rest/v1/app_versions" \
+            -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+            -H "apikey: $SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "$PAYLOAD"
+
+          echo "Published version ${VERSION_NAME} (code ${VERSION_CODE})."
 
       - name: Clean up keystore
         if: always()

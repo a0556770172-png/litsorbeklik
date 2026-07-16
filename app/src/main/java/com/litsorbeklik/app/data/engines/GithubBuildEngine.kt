@@ -30,11 +30,10 @@ class GithubBuildEngine(
         val filesByPath = project.files.associate { it.path to it.content }
         val commitMessage = "Generated build: ${project.appName} (${UUID.randomUUID().toString().take(8)})"
 
-        api.pushProject(filesByPath, commitMessage).getOrThrow()
-
-        // Give GitHub a moment to register the run triggered by this push before polling for it.
-        kotlinx.coroutines.delay(5_000)
-        val run = api.latestWorkflowRun().getOrThrow()
+        // One atomic commit for the whole project (not one commit per file), then poll for the
+        // workflow run GitHub registers specifically for that commit sha.
+        val commitSha = api.pushProjectAtomic(filesByPath, commitMessage).getOrThrow()
+        val run = api.findWorkflowRunForCommit(commitSha).getOrThrow()
 
         BuildRun(
             id = "", // filled in by the caller once persisted to Supabase
